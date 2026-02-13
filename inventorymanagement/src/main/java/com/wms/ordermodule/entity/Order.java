@@ -136,17 +136,17 @@ public class Order implements Serializable {
 
 
     public enum OrderStatus {
-        PENDING,           // Order created, waiting for payment
-        PAYMENT_PENDING,   // Payment processing
-        PAYMENT_FAILED,    // Payment failed
-        CONFIRMED,         // Payment successful, stock reserved
-        PROCESSING,        // Being prepared for shipment
-        PACKED,            // Packed and ready to ship
-        SHIPPED,           // Dispatched
-        DELIVERED,         // Delivered to customer
-        CANCELLED,         // Cancelled before fulfillment
-        REFUNDED,          // Refunded after payment
-        RETURNED           // Customer returned
+        PENDING,
+        PAYMENT_PENDING,
+        PAYMENT_FAILED,
+        CONFIRMED,
+        PROCESSING,
+        PACKED,
+        SHIPPED,
+        DELIVERED,
+        CANCELLED,
+        REFUNDED,
+        RETURNED
     }
 
     public enum PaymentStatus {
