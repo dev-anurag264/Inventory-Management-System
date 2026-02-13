@@ -1,0 +1,20 @@
+# Maven
+target/
+
+# IntelliJ
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Environment
+.env
+
+# Spring Boot sensitive configs
+src/main/resources/application.yml
+src/main/resources/application-dev.yml
+application-local.yml
