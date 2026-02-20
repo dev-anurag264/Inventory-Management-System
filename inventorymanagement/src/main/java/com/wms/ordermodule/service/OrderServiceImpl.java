@@ -15,6 +15,8 @@ import com.wms.service.StockAlertService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -46,7 +48,7 @@ public class OrderServiceImpl {
     @Transactional(isolation = Isolation.SERIALIZABLE)
     @CacheEvict(value={"products","productStats"}, allEntries = true)
     public OrderResponse createOrder(CreateOrderRequest request){
-        OrderValidationResult validationResult =validateOrderInventory(request);
+        OrderValidationResult validationResult = validateOrderInventory(request);
         if(!validationResult.isValid()){
             log.error("Order Validation failed for Order {}", validationResult.getErrors());
                 throw new RuntimeException();
@@ -252,6 +254,51 @@ public class OrderServiceImpl {
         }
     }
 
+
+    //Fullfill orders
+    @Transactional
+    public OrderResponse fullfillOrder(String orderNumber){
+        log.info("fullfilling order request for Order no.: {}", orderNumber);
+
+        Order order = orderRepository.findByOrderNumberWithLock(orderNumber).orElseThrow(() -> new ProductNotFoundException(orderNumber));
+        //check to  only fullfill Confirmed order
+        if(order.getStatus() != Order.OrderStatus.CONFIRMED){
+            throw new IllegalStateException("Can only fulfill for CONFIRMED orders");
+        }
+
+        for(OrderItem item: order.getOrderItems()){
+            Product product = productRepository.findBySkuWithLock(item.getProductSku())
+                    .orElseThrow(() -> new ProductNotFoundException(item.getProductSku()));
+
+            //First Release Reservations
+            product.setReservedQty(product.getReservedQty() - product.getQty());
+            // Deduct from physical stocks
+            product.setQty(product.getQty() - item.getQuantity());
+            productRepository.save(product);
+            //Record Stock out transactions
+            InventoryTransaction stockOut = new InventoryTransaction();
+            stockOut.setProduct(product);
+            stockOut.setTransactionType(InventoryTransaction.TransactionType.STOCK_OUT);
+            stockOut.setQuantity(item.getQuantity());
+            stockOut.setPreviousQuantity(product.getQty() + item.getQuantity());
+            stockOut.setNewQuantity(product.getQty());
+            stockOut.setReferenceId(orderNumber);
+            stockOut.setPerformedBy("FULFILLMENT_SYSTEM");
+            stockOut.setNotes("Fulfilled order: " + orderNumber);
+            inventoryTransactionRepository.save(stockOut);
+
+            item.setFulfilledQuantity(item.getQuantity());
+            item.setStatus(OrderItem.ItemStatus.FULFILLED);
+
+            alertService.checkAndCreateAlert(product);
+        }
+        order.setStatus(Order.OrderStatus.PROCESSING);
+        Order updated = orderRepository.save(order);
+
+        log.info("Order fulfilled successfully: {}", orderNumber);
+        return mapToResponse(updated);
+    }
+
     @Async("taskExecutor")
     private void triggerFulfillmentProcess(Order order) {
         try {
@@ -314,5 +361,9 @@ public class OrderServiceImpl {
                 order.getOrderItems().size(),
                 order.getCreatedAt()
         );
+    }
+    public Page<OrderResponse> getAllOrders(Pageable pageable) {
+        return orderRepository.findAll(pageable)
+                .map(this::mapToResponse);
     }
 }

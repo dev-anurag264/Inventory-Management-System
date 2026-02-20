@@ -35,7 +35,6 @@ public class ProductController {
 
     @GetMapping("/get-all-products")
     public ResponseEntity<List<ProductResponse>> getAllProducts() {
-
         List<ProductResponse> products = productService.getAllProducts();
         if(products!=null){
             return ResponseEntity.ok(products);
